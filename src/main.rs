@@ -14,10 +14,26 @@
 //! - Reply (everyone): "&lt;id&gt; disconnected"
 //! - The user is set to be receiving binary data
 //! - (Filtered out, not received)
+//!
+//! # Environment Variables
+//!
+//! Set the "WSS" variable to a WebSocket handshake endpoint.
+//! For example:
+//!
+//! ```bash
+//! WSS=ws://localhost:3000/ws cargo run
+//! ```
+//!
+//! If not given, the default is "ws://localhost:3000/ws".
+//!
+//! (See the implementation of [`route`] for more details.)
 
-use std::sync::{
-    atomic::{self, AtomicU64},
-    Arc,
+use std::{
+    sync::{
+        atomic::{self, AtomicU64},
+        Arc,
+    },
+    time::Duration,
 };
 
 use axum::{
@@ -26,10 +42,11 @@ use axum::{
         ws::{CloseFrame, Message, WebSocket},
         State, WebSocketUpgrade,
     },
-    response::Response,
+    response::{Html, IntoResponse, Response},
     routing::get,
     Router,
 };
+use sailfish::TemplateOnce;
 use tokio::sync::broadcast::{self, error::RecvError};
 use tracing::instrument;
 
@@ -39,6 +56,8 @@ struct AppState {
     cnt: AtomicU64,
     /// Sender
     snd: broadcast::Sender<(u64, Message)>,
+    /// Where to phone for the WebSocket
+    wss: String,
 }
 
 #[instrument(skip(ws, state))]
@@ -87,8 +106,19 @@ async fn handle(mut ws: WebSocket, state: Arc<AppState>, id: u64) {
             Race::Me(None) => break,
             // Handle errors
             Race::Me(Some(Err(e))) => tracing::error!("msg error {e:?}"),
+            // Say no to a message that's too large
+            Race::Me(Some(Ok(Message::Text(t)))) if t.len() > 500 => {
+                tracing::warn!("{} sent too long message", id);
+                // Warn but don't close
+                ws.send(Message::Text("message too long, not sent".to_string()))
+                    .await
+                    .unwrap();
+                // Wait
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
             // Send message to others
             Race::Me(Some(Ok(msg @ Message::Text(_)))) => {
+                // The magic: send to the broadcast channel
                 state.snd.send((id, msg)).unwrap();
             }
             // Reject binary messages, close connection
@@ -131,14 +161,34 @@ async fn upgrade(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Re
     })
 }
 
+/// Serve the index page
+#[instrument(skip(state))]
+async fn index(State(state): State<Arc<AppState>>) -> Response {
+    #[derive(TemplateOnce)]
+    #[template(path = "index.html")]
+    struct IndexHtml<'a> {
+        host: &'a str,
+    }
+
+    let index_html = IndexHtml {
+        host: state.wss.as_str(),
+    };
+
+    Html(index_html.render_once().unwrap()).into_response()
+}
+
 fn route() -> Router {
     // Construct state
     let cnt = AtomicU64::new(0);
     let (snd, _rcv) = broadcast::channel(100);
+    let wss = std::env::var("WSS").unwrap_or_else(|_| "ws://localhost:3000/ws".into());
+
+    tracing::info!("WSS phone: {}", wss);
 
     Router::new()
+        .route("/", get(index))
         .route("/ws", get(upgrade))
-        .with_state(Arc::new(AppState { cnt, snd }))
+        .with_state(Arc::new(AppState { cnt, snd, wss }))
 }
 
 #[tokio::main]

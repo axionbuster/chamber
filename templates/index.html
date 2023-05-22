@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Chat With Everyone! A WebSocket demo">
+    <title>Chat With Everyone!</title>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        form {
+            padding: 3px;
+            width: 100%;
+        }
+
+        form button {
+            width: 9%;
+            background: rgb(130, 224, 255);
+            border: none;
+            padding: 10px;
+        }
+
+        ul {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            border: rgb(43, 45, 46) solid 1px;
+
+            display: flex;
+            flex-direction: column-reverse;
+        }
+
+        ul li {
+            padding: 5px 10px;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Chat With Everyone!</h1>
+    <form>
+        <label for="msg">Message:</label>
+        <input type="text" id="msg" name="msg" maxlength="500" required>
+        <button type="submit">Send</button>
+    </form>
+    <ul></ul>
+
+    <script>
+        const form = document.querySelector('form');
+        const ul = document.querySelector('ul');
+        const input = document.querySelector('input');
+        const socket = new WebSocket('<%= host %>');
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            socket.send(input.value);
+            input.value = '';
+        });
+
+        socket.addEventListener('message', function (e) {
+            const li = document.createElement('li');
+            li.innerText = e.data;
+            ul.appendChild(li);
+        });
+    </script>
+</body>
+
+</html>
