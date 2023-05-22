@@ -1,0 +1,12 @@
+[package]
+name = "chamber"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = { version = "0.6.18", features = ["ws", "macros"] }
+tokio = { version = "1.28.1", features = ["full"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
