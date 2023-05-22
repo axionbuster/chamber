@@ -2,6 +2,7 @@ FROM rust:latest as builder
 
 WORKDIR /usr/src/app
 COPY src src
+COPY templates templates
 COPY Cargo.toml Cargo.toml
 COPY Cargo.lock Cargo.lock
 RUN cargo install --path .
